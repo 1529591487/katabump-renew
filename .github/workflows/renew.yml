@@ -42,7 +42,7 @@ jobs:
         name: screenshots
         path: screenshots/
 
-	# ================= 动态随机下一次执行时间 =================
+# ================= 动态随机下一次执行时间 =================
     - name: Randomize Next Cron
       if: always() 
       env:
