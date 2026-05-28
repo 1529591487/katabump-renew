@@ -6,10 +6,6 @@ on:
     - cron: '30 4 * * *'
   workflow_dispatch: # 允许手动触发
 
-# 添加以下配置，赋予工作流写权限
-permissions:
-  contents: write
-
 jobs:
   renew:
     runs-on: ubuntu-latest
@@ -17,7 +13,10 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     
     steps:
+    # 【修改点 1】在这里直接挂载你的 PAT。这样后续所有的 Git 操作都会自动、安全地复用该凭证
     - uses: actions/checkout@v5
+      with:
+        token: ${{ secrets.MY_PERSONAL_ACCESS_TOKEN }}
     
     - name: Setup Node.js
       uses: actions/setup-node@v5
@@ -45,11 +44,10 @@ jobs:
       with:
         name: screenshots
         path: screenshots/
+
 # ================= 动态随机下一次执行时间 =================
     - name: Randomize Next Cron
       if: always() 
-      env:
-        MY_TOKEN: ${{ secrets.MY_PERSONAL_ACCESS_TOKEN }}
       run: |
         # 1. 自动定位当前工作流文件
         WORKFLOW_FILE=$(grep -l "name: Katabump Auto Renew" .github/workflows/*.yml | head -n 1)
@@ -60,14 +58,12 @@ jobs:
         echo "正在处理文件: $WORKFLOW_FILE"
 
         # 2. 生成随机时间 (UTC 时间：小时 0-23，分钟 0-59)
-        # 如果想限定在北京时间白天，可自行换算成 UTC 范围
         RAND_MIN=$((RANDOM % 60))
         RAND_HOUR=$((RANDOM % 24))
         NEW_CRON="    - cron: '$RAND_MIN $RAND_HOUR * * *'"
         echo "生成的下一次触发时间 (UTC): $RAND_HOUR:$RAND_MIN"
 
         # 3. 使用 sed 替换已有的 cron 行
-        # 匹配包含 - cron: 的行并整行替换
         sed -i "s/.*- cron:.*/$NEW_CRON/" "$WORKFLOW_FILE"
 
         # 4. 配置 Git 并推送到仓库
@@ -78,5 +74,5 @@ jobs:
         # [skip ci] 用于防止部分仓库配置了 push 触发导致死循环
         git commit -m "chore: randomize next cron to $RAND_HOUR:$RAND_MIN UTC [skip ci]" || echo "无文件变更"
         
-        # 使用配置好的 PAT 密钥推送
-        git push https://x-access-token:${MY_TOKEN}@github.com/${{ github.repository }}.git HEAD:${{ github.ref }}
+        # 【修改点 2】由于 checkout 已经全局托管了 PAT 凭证，此处直接安全推送即可，无需在 URL 中拼接明文 Token
+        git push origin HEAD:${{ github.ref }}
