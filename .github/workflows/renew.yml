@@ -6,6 +6,10 @@ on:
     - cron: '30 4 * * *'
   workflow_dispatch: # 允许手动触发
 
+# 添加以下配置，赋予工作流写权限
+permissions:
+  contents: write
+
 jobs:
   renew:
     runs-on: ubuntu-latest
@@ -42,7 +46,7 @@ jobs:
         name: screenshots
         path: screenshots/
 
-# ================= 动态随机下一次执行时间 =================
+	# ================= 动态随机下一次执行时间 =================
     - name: Randomize Next Cron
       if: always() 
       env:
