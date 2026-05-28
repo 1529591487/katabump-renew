@@ -2,8 +2,8 @@ name: Katabump Auto Renew
 
 on:
   schedule:
-    # 每天 UTC 0点 (北京时间 8点) 运行
-    - cron: '0 0 * * *'
+    # 初始默认触发时间（北京时间 12:30），后续运行结束时会被自动覆盖改写
+    - cron: '30 4 * * *'
   workflow_dispatch: # 允许手动触发
 
 jobs:
@@ -29,13 +29,10 @@ jobs:
       
     - name: Run Renew Script
       env:
-        # 将 USERS_JSON 配置在 GitHub Repository Secrets 中
-        # 格式: [{"username": "xxx", "password": "xxx"}, ...]
         USERS_JSON: ${{ secrets.USERS_JSON }}
         HTTP_PROXY: ${{ secrets.HTTP_PROXY }}
         TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
         TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-      # 使用 xvfb-run 模拟有头环境运行
       run: xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" node action_renew.js
 
     - name: Upload Screenshots
@@ -44,3 +41,15 @@ jobs:
       with:
         name: screenshots
         path: screenshots/
+
+    # ================= 动态随机下一次执行时间 =================
+    - name: Randomize Next Cron
+      if: always() 
+      uses: grbnb/random-workflows-cron@v2
+      with:
+        github_token: ${{ secrets.MY_PERSONAL_ACCESS_TOKEN }}
+        keep_history: true  # 保持历史提交记录干净，不堆积无意义的 commit message
+        time_zone: 'UTC+8'  # 设定参考时区（北京时间）
+        hour_start: 0       # 允许随机的开始小时（北京时间 0 点）
+        hour_end: 23        # 允许随机的结束小时（北京时间 23 点）
+        interval_count: 1   # 每天执行的频次
