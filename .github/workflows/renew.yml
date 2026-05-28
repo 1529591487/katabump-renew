@@ -42,14 +42,38 @@ jobs:
         name: screenshots
         path: screenshots/
 
-    # ================= 动态随机下一次执行时间 =================
+	# ================= 动态随机下一次执行时间 =================
     - name: Randomize Next Cron
       if: always() 
-      uses: grbnb/random-workflows-cron@v2
-      with:
-        github_token: ${{ secrets.MY_PERSONAL_ACCESS_TOKEN }}
-        keep_history: true  # 保持历史提交记录干净，不堆积无意义的 commit message
-        time_zone: 'UTC+8'  # 设定参考时区（北京时间）
-        hour_start: 0       # 允许随机的开始小时（北京时间 0 点）
-        hour_end: 23        # 允许随机的结束小时（北京时间 23 点）
-        interval_count: 1   # 每天执行的频次
+      env:
+        MY_TOKEN: ${{ secrets.MY_PERSONAL_ACCESS_TOKEN }}
+      run: |
+        # 1. 自动定位当前工作流文件
+        WORKFLOW_FILE=$(grep -l "name: Katabump Auto Renew" .github/workflows/*.yml | head -n 1)
+        if [ -z "$WORKFLOW_FILE" ]; then
+          echo "未找到对应的工作流文件，请检查 name 是否匹配"
+          exit 1
+        fi
+        echo "正在处理文件: $WORKFLOW_FILE"
+
+        # 2. 生成随机时间 (UTC 时间：小时 0-23，分钟 0-59)
+        # 如果想限定在北京时间白天，可自行换算成 UTC 范围
+        RAND_MIN=$((RANDOM % 60))
+        RAND_HOUR=$((RANDOM % 24))
+        NEW_CRON="    - cron: '$RAND_MIN $RAND_HOUR * * *'"
+        echo "生成的下一次触发时间 (UTC): $RAND_HOUR:$RAND_MIN"
+
+        # 3. 使用 sed 替换已有的 cron 行
+        # 匹配包含 - cron: 的行并整行替换
+        sed -i "s/.*- cron:.*/$NEW_CRON/" "$WORKFLOW_FILE"
+
+        # 4. 配置 Git 并推送到仓库
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add "$WORKFLOW_FILE"
+        
+        # [skip ci] 用于防止部分仓库配置了 push 触发导致死循环
+        git commit -m "chore: randomize next cron to $RAND_HOUR:$RAND_MIN UTC [skip ci]" || echo "无文件变更"
+        
+        # 使用配置好的 PAT 密钥推送
+        git push https://x-access-token:${MY_TOKEN}@github.com/${{ github.repository }}.git HEAD:${{ github.ref }}
