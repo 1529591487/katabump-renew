@@ -3,7 +3,7 @@ name: Katabump Auto Renew
 on:
   schedule:
     # 初始默认触发时间（北京时间 12:30），后续运行结束时会被自动覆盖改写
-    - cron: '30 4 * * *'
+    - cron: '29 6 * * *'
   workflow_dispatch: # 允许手动触发
 
 jobs:
@@ -60,11 +60,11 @@ jobs:
         # 2. 生成随机时间 (UTC 时间：小时 0-23，分钟 0-59)
         RAND_MIN=$((RANDOM % 60))
         RAND_HOUR=$((RANDOM % 24))
-        NEW_CRON="    - cron: '$RAND_MIN $RAND_HOUR * * *'"
+    - cron: '29 6 * * *'
         echo "生成的下一次触发时间 (UTC): $RAND_HOUR:$RAND_MIN"
 
         # 3. 使用 sed 替换已有的 cron 行
-        sed -i "s/.*- cron:.*/$NEW_CRON/" "$WORKFLOW_FILE"
+    - cron: '29 6 * * *'
 
         # 4. 配置 Git 并推送到仓库
         git config --local user.email "action@github.com"
