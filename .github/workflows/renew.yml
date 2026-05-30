@@ -13,9 +13,9 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     
     steps:
-    # 【修改点 1】在这里直接挂载你的 PAT。这样后续所有的 Git 操作都会自动、安全地复用该凭证
     - uses: actions/checkout@v5
       with:
+        # 注意：此 PAT 必须在个人设置中勾选 `workflow` 权限，否则无法推送工作流文件的变更
         token: ${{ secrets.MY_PERSONAL_ACCESS_TOKEN }}
     
     - name: Setup Node.js
@@ -60,19 +60,23 @@ jobs:
         # 2. 生成随机时间 (UTC 时间：小时 0-23，分钟 0-59)
         RAND_MIN=$((RANDOM % 60))
         RAND_HOUR=$((RANDOM % 24))
-    - cron: '29 6 * * *'
-        echo "生成的下一次触发时间 (UTC): $RAND_HOUR:$RAND_MIN"
+        NEW_CRON="$RAND_MIN $RAND_HOUR * * *"
+        echo "生成的下一次触发时间 (CRON): $NEW_CRON"
 
-        # 3. 使用 sed 替换已有的 cron 行
-    - cron: '29 6 * * *'
+        # 3. 使用 sed 真正替换已有的 cron 行
+        # 匹配 - cron: '...' 或 - cron: "..." 并替换整个表达式
+        sed -i -E "s/- cron:\s*['\"].*['\"]/- cron: '$NEW_CRON'/g" "$WORKFLOW_FILE"
 
         # 4. 配置 Git 并推送到仓库
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git add "$WORKFLOW_FILE"
         
-        # [skip ci] 用于防止部分仓库配置了 push 触发导致死循环
-        git commit -m "chore: randomize next cron to $RAND_HOUR:$RAND_MIN UTC [skip ci]" || echo "无文件变更"
-        
-        # 【修改点 2】由于 checkout 已经全局托管了 PAT 凭证，此处直接安全推送即可，无需在 URL 中拼接明文 Token
-        git push origin HEAD:${{ github.ref }}
+        # 提交更改
+        if git commit -m "chore: randomize next cron to $NEW_CRON UTC [skip ci]"; then
+          # 直接安全推送
+          git push origin HEAD:${{ github.ref }}
+          echo "成功更新下一次触发时间。"
+        else
+          echo "无文件变更，跳过推送。"
+        fi
