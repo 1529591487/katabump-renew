@@ -3,7 +3,7 @@ name: Katabump Auto Renew
 on:
   schedule:
     # 初始默认触发时间（北京时间 12:30），后续运行结束时会被自动覆盖改写
-    - cron: '29 6 * * *'
+    - cron: '17 8 * * *'
   workflow_dispatch: # 允许手动触发
 
 jobs:
@@ -64,7 +64,7 @@ jobs:
         echo "生成的下一次触发时间 (CRON): $NEW_CRON"
 
         # 3. 使用稳定定界符进行替换，彻底避免单双引号嵌套导致的 EOF 解析错误
-        sed -i -E "s#\- cron:.*#- cron: '$NEW_CRON'#g" "$WORKFLOW_FILE"
+        sed -i -E "s#\- cron: '17 8 * * *'
 
         # 4. 配置 Git 并推送到仓库
         git config --local user.email "action@github.com"
