@@ -1,4 +1,52 @@
-- name: Randomize Next Cron
+name: Katabump Auto Renew
+
+on:
+  schedule:
+    # 初始默认触发时间（北京时间 12:30），后续运行结束时会被自动覆盖改写
+    - cron: '29 6 * * *'
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  renew:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    
+    steps:
+    # 全局挂载具有 workflow 权限的 PAT
+    - uses: actions/checkout@v5
+      with:
+        token: ${{ secrets.MY_PERSONAL_ACCESS_TOKEN }}
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v5
+      with:
+        node-version: '20'
+        
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y xvfb
+        npm install
+        npx playwright install-deps chrome
+      
+    - name: Run Renew Script
+      env:
+        USERS_JSON: ${{ secrets.USERS_JSON }}
+        HTTP_PROXY: ${{ secrets.HTTP_PROXY }}
+        TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+        TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+      run: xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" node action_renew.js
+
+    - name: Upload Screenshots
+      if: always()
+      uses: actions/upload-artifact@v5
+      with:
+        name: screenshots
+        path: screenshots/
+
+# ================= 动态随机下一次执行时间 =================
+    - name: Randomize Next Cron
       if: always() 
       run: |
         # 1. 自动定位当前工作流文件
@@ -15,7 +63,7 @@
         NEW_CRON="$RAND_MIN $RAND_HOUR * * *"
         echo "生成的下一次触发时间 (CRON): $NEW_CRON"
 
-        # 3. 使用稳定定界符进行替换，避免硬编码单双引号嵌套
+        # 3. 使用稳定定界符进行替换，彻底避免单双引号嵌套导致的 EOF 解析错误
         sed -i -E "s#\- cron:.*#- cron: '$NEW_CRON'#g" "$WORKFLOW_FILE"
 
         # 4. 配置 Git 并推送到仓库
@@ -23,9 +71,10 @@
         git config --local user.name "GitHub Action"
         git add "$WORKFLOW_FILE"
         
+        # 提交更改
         if git commit -m "chore: randomize next cron to $NEW_CRON UTC [skip ci]"; then
           git push origin HEAD:${{ github.ref }}
-          echo "成功更新下一次触发时间。"
+          echo "成功更新下一次触发时间并推送到仓库。"
         else
           echo "无文件变更，跳过推送。"
         fi
