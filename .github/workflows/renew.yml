@@ -3,7 +3,7 @@ name: Katabump Auto Renew
 on:
   schedule:
     # 初始默认触发时间（北京时间 12:30），后续运行结束时会被自动覆盖改写
-    - cron: '29 6 * * *'
+    - cron: '3 7 * * *'
   workflow_dispatch: # 允许手动触发
 
 jobs:
@@ -62,12 +62,12 @@ jobs:
         RAND_HOUR=$(( RANDOM % 24 ))
         
         # 3. 使用 printf 格式化表达式，完全避开双引号引起的 EOF 错误
-        # 这会生成类似 - cron: '54 0 * * *' 的标准行
-        TARGET_LINE=$(printf -- "- cron: '%d %d * * *'" $RAND_MIN $RAND_HOUR)
+        # 这会生成类似 - cron: '3 7 * * *'
+        TARGET_LINE=$(printf -- "- cron: '3 7 * * *'
         echo "即将替换为: $TARGET_LINE"
 
         # 4. 精准匹配旧的 cron 行并直接平替
-        sed -i -E "s#\- cron:.*#$TARGET_LINE#g" "$WORKFLOW_FILE"
+        sed -i -E "s#\- cron: '3 7 * * *'
 
         # 5. 配置 Git 并推送到仓库
         git config --local user.email "action@github.com"
