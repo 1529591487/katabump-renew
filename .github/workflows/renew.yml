@@ -3,7 +3,7 @@ name: Katabump Auto Renew
 on:
   schedule:
     # 初始默认触发时间（北京时间 12:30），后续运行结束时会被自动覆盖改写
-    - cron: '17 8 * * *'
+    - cron: '29 6 * * *'
   workflow_dispatch: # 允许手动触发
 
 jobs:
@@ -57,22 +57,24 @@ jobs:
         fi
         echo "正在处理文件: $WORKFLOW_FILE"
 
-        # 2. 生成随机时间 (UTC 时间：小时 0-23，分钟 0-59)
-        RAND_MIN=$((RANDOM % 60))
-        RAND_HOUR=$((RANDOM % 24))
-        NEW_CRON="$RAND_MIN $RAND_HOUR * * *"
-        echo "生成的下一次触发时间 (CRON): $NEW_CRON"
+        # 2. 纯数字计算，不使用任何复杂的字符串和引号包裹
+        RAND_MIN=$(( RANDOM % 60 ))
+        RAND_HOUR=$(( RANDOM % 24 ))
+        
+        # 3. 使用 printf 格式化表达式，完全避开双引号引起的 EOF 错误
+        # 这会生成类似 - cron: '54 0 * * *' 的标准行
+        TARGET_LINE=$(printf -- "- cron: '%d %d * * *'" $RAND_MIN $RAND_HOUR)
+        echo "即将替换为: $TARGET_LINE"
 
-        # 3. 使用稳定定界符进行替换，彻底避免单双引号嵌套导致的 EOF 解析错误
-        sed -i -E "s#\- cron: '17 8 * * *'
+        # 4. 精准匹配旧的 cron 行并直接平替
+        sed -i -E "s#\- cron:.*#$TARGET_LINE#g" "$WORKFLOW_FILE"
 
-        # 4. 配置 Git 并推送到仓库
+        # 5. 配置 Git 并推送到仓库
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git add "$WORKFLOW_FILE"
         
-        # 提交更改
-        if git commit -m "chore: randomize next cron to $NEW_CRON UTC [skip ci]"; then
+        if git commit -m "chore: randomize next cron [skip ci]"; then
           git push origin HEAD:${{ github.ref }}
           echo "成功更新下一次触发时间并推送到仓库。"
         else
