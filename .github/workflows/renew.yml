@@ -3,7 +3,7 @@ name: Katabump Auto Renew
 on:
   schedule:
     # 初始默认触发时间（北京时间 12:30），后续运行结束时会被自动覆盖改写
-    - cron: '3 7 * * *'
+    - cron: '29 6 * * *'
   workflow_dispatch: # 允许手动触发
 
 jobs:
@@ -49,30 +49,44 @@ jobs:
     - name: Randomize Next Cron
       if: always() 
       run: |
-        # 1. 自动定位当前工作流文件
-        WORKFLOW_FILE=$(grep -l "name: Katabump Auto Renew" .github/workflows/*.yml | head -n 1)
-        if [ -z "$WORKFLOW_FILE" ]; then
-          echo "未找到对应的工作流文件，请检查 name 是否匹配"
-          exit 1
-        fi
-        echo "正在处理文件: $WORKFLOW_FILE"
+        python3 -c "
+        import glob, random, re, sys
 
-        # 2. 纯数字计算，不使用任何复杂的字符串和引号包裹
-        RAND_MIN=$(( RANDOM % 60 ))
-        RAND_HOUR=$(( RANDOM % 24 ))
-        
-        # 3. 使用 printf 格式化表达式，完全避开双引号引起的 EOF 错误
-        # 这会生成类似 - cron: '3 7 * * *'
-        TARGET_LINE=$(printf -- "- cron: '3 7 * * *'
-        echo "即将替换为: $TARGET_LINE"
+        # 1. 定位工作流文件
+        files = glob.glob('.github/workflows/*.yml')
+        workflow_file = None
+        for f in files:
+            with open(f, 'r', encoding='utf-8') as fh:
+                if 'name: Katabump Auto Renew' in fh.read():
+                    workflow_file = f
+                    break
 
-        # 4. 精准匹配旧的 cron 行并直接平替
-        sed -i -E "s#\- cron: '3 7 * * *'
+        if not workflow_file:
+            print('未找到对应的工作流文件')
+            sys.exit(1)
+        print(f'正在处理文件: {workflow_file}')
 
-        # 5. 配置 Git 并推送到仓库
+        # 2. 生成随机时间
+        rand_min = random.randint(0, 59)
+        rand_hour = random.randint(0, 23)
+        new_cron = f'- cron: \'{rand_min} {rand_hour} * * *\''
+        print(f'生成的下一次触发时间: {new_cron}')
+
+        # 3. 读取、替换并写回文件
+        with open(workflow_file, 'r', encoding='utf-8') as fh:
+            content = fh.read()
+
+        # 使用正则精准替换旧的 cron 行
+        updated_content = re.sub(r'- cron:\s*[\'\"].*?[\'\"]', new_cron, content)
+
+        with open(workflow_file, 'w', encoding='utf-8') as fh:
+            fh.write(updated_content)
+        "
+
+        # 4. 配置 Git 并推送到仓库
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        git add "$WORKFLOW_FILE"
+        git add .github/workflows/*.yml
         
         if git commit -m "chore: randomize next cron [skip ci]"; then
           git push origin HEAD:${{ github.ref }}
