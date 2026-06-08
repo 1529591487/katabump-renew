@@ -3,7 +3,7 @@ name: Katabump Auto Renew
 on:
   schedule:
     # 初始默认触发时间，后续运行结束时会被自动覆盖改写为具体的“日 月”
-    - cron: '55 12 9 6 *'
+    - cron: '29 6 * * *'
   workflow_dispatch: # 允许手动触发
 
 jobs:
@@ -54,36 +54,65 @@ jobs:
         python3 -c "
         import glob, os, random, re, sys, datetime
 
-        # 1. 解析日志，判断是否续期成功
         log_file = 'renew.log'
         is_success = False
+        parsed_date = None
+
+        # 建立英文月份映射字典，兼容全称与缩写
+        months_map = {
+            'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+            'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+            'january': 1, 'february': 2, 'march': 3, 'april': 4, 'june': 6,
+            'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12
+        }
+
         if os.path.exists(log_file):
             with open(log_file, 'r', encoding='utf-8') as f:
                 log_content = f.read()
+                
+                # 1. 检查是否显式成功
                 if '续期成功！' in log_content:
                     is_success = True
+                
+                # 2. 尝试从日志中捕获具体的下一次可续期时间
+                # 匹配 '下次可续期: 12 June' 或 '下次可续期:12 Jun' 等格式
+                date_match = re.search(r'下次可续期:\s*(\d+)\s*([A-Za-z]+)', log_content)
+                if date_match:
+                    try:
+                        d = int(date_match.group(1))
+                        m_str = date_match.group(2).lower()
+                        m = months_map.get(m_str)
+                        if m:
+                            now = datetime.datetime.utcnow()
+                            y = now.year
+                            # 处理跨年边界情况（例如当前12月，下次续期在1月）
+                            if m == 1 and now.month == 12:
+                                y += 1
+                            parsed_date = datetime.datetime(y, m, d)
+                    except Exception as e:
+                        print(f'解析预留日期失败: {e}')
         else:
-            print('未找到运行日志，默认按未成功处理。')
+            print('未找到运行日志，采用默认兜底策略。')
 
-        # 2. 根据结果动态决定间隔天数
-        if is_success:
-            print('【结果】检测到续期成功！设定 3 天后再次执行。')
-            days_to_add = 3
+        # 3. 核心时间决策树
+        if parsed_date:
+            print(f'【结果】成功提取到日志中的明确续期日期: {parsed_date.strftime(\"%Y-%m-%d\")}')
+            next_date = parsed_date
+        elif is_success:
+            print('【结果】续期成功，默认 3 天后再次执行。')
+            next_date = datetime.datetime.utcnow() + datetime.timedelta(days=3)
         else:
-            print('【结果】未成功续期（或暂无法续期），设定 1 天后（明天）重试。')
-            days_to_add = 1
+            print('【结果】未成功且无明确日期指示，设定 1 天后（明天）重试。')
+            next_date = datetime.datetime.utcnow() + datetime.timedelta(days=1)
 
-        # 3. 基于 UTC 时间计算精确的下一次触发日期与随机时间点
-        next_date = datetime.datetime.utcnow() + datetime.timedelta(days=days_to_add)
+        # 4. 生成随机时间点并计算 Cron (格式: 分 时 日 月 周)
         rand_min = random.randint(0, 59)
         rand_hour = random.randint(0, 23)
-        
-        # 构造指定“日”和“月”的 Cron 表达式: 分 时 日 月 周
         new_cron = f'- cron: \'{rand_min} {rand_hour} {next_date.day} {next_date.month} *\''
-        print(f'动态计算完成。下一次触发时间 (UTC): {next_date.strftime(\"%Y-%m-%d\")} {rand_hour}:{rand_min}')
+        print(f'下一次触发时间 (UTC): {next_date.strftime(\"%Y-%m-%d\")} {rand_hour}:{rand_min}')
         print(f'生成的 Cron 表达式: {new_cron}')
 
-        # 4. 定位工作流文件并重写
+        # 5. 定位并更新工作流文件
         workflow_file = None
         for f in glob.glob('.github/workflows/*.yml'):
             with open(f, 'r', encoding='utf-8') as fh:
@@ -104,10 +133,9 @@ jobs:
             fh.write(updated_content)
         "
 
-        # 5. 将工作流变更同步推送到 GitHub 仓库
+        # 6. 将工作流变更同步推送到 GitHub 仓库
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        
         git add .github/workflows/*.yml
         
         if git commit -m "chore: dynamic schedule update [skip ci]"; then
