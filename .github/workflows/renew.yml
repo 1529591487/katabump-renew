@@ -3,7 +3,7 @@ name: Katabump Auto Renew
 on:
   schedule:
     # 初始默认触发时间，后续运行结束时会被自动覆盖改写为具体的“日 月”
-    - cron: '56 8 12 7 *'
+    - cron: '21 6 13 7 *'
   workflow_dispatch: # 允许手动触发
 
 jobs:
